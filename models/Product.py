@@ -1,4 +1,4 @@
-from database import Base, Column, Integer, String, Date
+from .database import Base, Column, Integer, String, Date
 
 
 class Product(Base):
@@ -9,3 +9,6 @@ class Product(Base):
     product_quantity: Column = Column('product_quantity', Integer)
     product_price: Column = Column('product_price', Integer)
     date_updated: Column = Column('date_updated', Date)
+
+    def __repr__(self) -> str:
+        return f'<Product, {self.product_name}, {self.product_quantity}, {self.product_price}, {self.date_updated}>'
