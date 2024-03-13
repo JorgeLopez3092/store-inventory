@@ -128,15 +128,22 @@ def add_product_csv(product_csv_file_path: str) -> None:
         next(data)
         row: list[str]
         for row in data:
+            product_name: str = row[0]
+            product_price_string: str = row[1].replace('$', '').strip()
+            product_price: int = int(float(product_price_string) * 100)
+            product_quantity: int = int(row[2])
+            date_updated: datetime = datetime.strptime(row[3], '%m/%d/%Y')
+            date_obj: date = date_updated.date()
             product_in_db: bool = session.query(Product).filter(Product.product_name == row[0]).one_or_none()
-            if not product_in_db:
-                product_name: str = row[0]
-                product_price_string: str = row[1].replace('$', '').strip()
-                product_price: int = int(float(product_price_string) * 100)
-                product_quantity: int = int(row[2])
-                date_updated: datetime = datetime.strptime(row[3], '%m/%d/%Y')
+            if product_in_db:
+                existing_product = session.query(Product).filter(Product.product_name == row[0]).first()
+                if date_obj > existing_product.date_updated:
+                    existing_product.product_price = product_price
+                    existing_product.product_quantity = product_quantity
+                    existing_product.date_updated = date_obj
+            else:
                 product: Product = Product(product_name=product_name, product_quantity=product_quantity,
-                                           product_price=product_price, date_updated=date_updated)
+                                           product_price=product_price, date_updated=date_obj)
                 session.add(product)
         session.commit()
 
@@ -164,7 +171,7 @@ def app():
             case 'a':
                 add_product()
             case 'b':
-                backup_database_to_csv()
+                bac6kup_database_to_csv()
             case _:
                 print('test test test test nothing valid picked')
 
