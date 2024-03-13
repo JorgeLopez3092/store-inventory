@@ -17,7 +17,6 @@ def menu() -> str:
         else:
             input('''
                     \rPlease choose one of the options above.
-                    \rA number from 1-5.
                     \rPress enter to try again.''')
 
 
@@ -40,20 +39,46 @@ def clean_quantity(quantity: str) -> int:
         quantity: int = int(quantity)
     except ValueError:
         input('''
-            \n****** PRICE ERROR ******
-            \rThe price should be a number.
+            \n****** QUANTITY ERROR ******
+            \rThe quantity should be a number.
             \rPress enter to try again.
             \r**************************''')
     else:
         return quantity
 
 
-def display_product_by_id(product_id: str) -> str:
-    product: Product = session.query(Product).filter(Product.product_id == int(product_id)).first()
+def display_product_by_id(product_id: int) -> str:
+    product: Product = session.query(Product).filter(Product.product_id == product_id).first()
     return f'''
-            \nProduct Name: {product.product_name}
-            \rPrice: {product.product_price}
-            \rQuantity: {product.product_price}'''
+            \nProduct ID: {product.product_id}
+            \rProduct Name: {product.product_name}
+            \rPrice: ${product.product_price / 100}
+            \rQuantity: {product.product_quantity}
+            \rLast Updated: {product.date_updated}
+            \nPress enter to continue....'''
+
+
+def view_product() -> None:
+    product_options: list = []
+    for product in session.query(Product):
+        product_options.append(product)
+    print(type(product_options[0]))
+    product_id_valid: bool = False
+    while not product_id_valid:
+        try:
+            print('\n****** OPTIONS ******')
+            for product in product_options:
+                print(f'{product.product_id}) {product.product_name}')
+            id_choice: int = int(input('Which product number would you like to view? '))
+            if id_choice not in [product.product_id for product in product_options]:
+                raise ValueError()
+        except ValueError:
+            input(f'''\n****** ID ERROR ******
+                      \rThe id should be a listed number.
+                      \rPress enter to try again.''')
+        else:
+            product_id_valid = True
+    input(display_product_by_id(id_choice))
 
 
 def add_product():
@@ -72,10 +97,29 @@ def add_product():
         if type(product_price) is int:
             product_price_valid = True
 
-    new_product: Product = Product(product_name=product_name, product_quantity=product_quantity,
-                                   product_price=product_price, date_updated=date.today())
-    session.add(new_product)
-    session.new()
+    product_in_db: bool = session.query(Product).filter(Product.product_name == product_name).one_or_none()
+    if product_in_db:
+        existing_product = session.query(Product).filter(Product.product_name == product_name).first()
+        existing_product.product_quantity = product_quantity
+        existing_product.product_price = product_price
+        existing_product.date_updated = date.today()
+    else:
+        new_product: Product = Product(product_name=product_name, product_quantity=product_quantity,
+                                       product_price=product_price, date_updated=date.today())
+        session.add(new_product)
+    confirm: None = None
+    collection = session.dirty if product_in_db else session.new
+    for product in collection:
+        confirm: str = input(f'''\nProduct Name: {product.product_name}
+                            \rProduct Price: ${product.product_price / 100}
+                            \rProduct Quantity: {product.product_quantity}
+                            \nEnter Y to confirm entry: ''')
+    if confirm.upper() == 'Y':
+        session.commit()
+        return input('\nInventory updated!\nPress enter to continue...')
+    else:
+        session.rollback()
+        return input('\nProduct aborted.\nPress enter to continue...')
 
 
 def add_product_csv(product_csv_file_path: str) -> None:
@@ -90,21 +134,42 @@ def add_product_csv(product_csv_file_path: str) -> None:
                 product_price_string: str = row[1].replace('$', '').strip()
                 product_price: int = int(float(product_price_string) * 100)
                 product_quantity: int = int(row[2])
-                date_updated = datetime.strptime(row[3], '%m/%d/%Y')
+                date_updated: datetime = datetime.strptime(row[3], '%m/%d/%Y')
                 product: Product = Product(product_name=product_name, product_quantity=product_quantity,
                                            product_price=product_price, date_updated=date_updated)
                 session.add(product)
         session.commit()
 
 
+def backup_database_to_csv():
+    path = 'backup.csv'
+    with open(path, 'w', newline='') as csvfile:
+        csvwriter = csv.writer(csvfile, delimiter=',')
+        csvwriter.writerow(['product_name', 'product_price', 'product_quantity', 'date_updated'])
+        for product in session.query(Product):
+            price: str = f'${product.product_price / 100}'
+            date_string: str = f'{product.date_updated}'
+            print(date_string, type(date_string))
+            updated_date: str = datetime.strptime(date_string, '%Y-%m-%d').strftime('%m/%d/%Y')
+            csvwriter.writerow([product.product_name, price, product.product_quantity, updated_date])
+
+
+def app():
+    app_running: bool = True
+    while app_running:
+        choice: str = menu()
+        match choice:
+            case 'v':
+                view_product()
+            case 'a':
+                add_product()
+            case 'b':
+                backup_database_to_csv()
+            case _:
+                print('test test test test nothing valid picked')
+
+
 if __name__ == '__main__':
     Base.metadata.create_all(engine)
     add_product_csv('inventory.csv')
-    choice = menu()
-    match choice:
-        case 'v':
-            print(display_product_by_id('1'))
-        case 'a':
-            add_product()
-        case _:
-            print('test test test test nothing valid picked')
+    app()
